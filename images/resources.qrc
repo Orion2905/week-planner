@@ -1,0 +1,28 @@
+<RCC>
+  <qresource prefix="icons">
+    <file>resize (1).png</file>
+    <file>clock2.png</file>
+    <file>planner.png</file>
+    <file>minimize (1).png</file>
+    <file>close.png</file>
+    <file>minus-sign.png</file>
+    <file>bin.png</file>
+    <file>diskette.png</file>
+    <file>next-week.png</file>
+    <file>pdf-file.png</file>
+    <file>prevoius.png</file>
+    <file>marker.png</file>
+    <file>printer.png</file>
+    <file>palette.png</file>
+    <file>list (1).png</file>
+    <file>list.png</file>
+    <file>bold.png</file>
+    <file>italic-font.png</file>
+    <file>underline-text.png</file>
+    <file>clock.png</file>
+    <file>minimize.png</file>
+    <file>resize.png</file>
+    <file>cross.png</file>
+    <file>minus.png</file>
+  </qresource>
+</RCC>
