@@ -1,5 +1,7 @@
 <RCC>
   <qresource prefix="icons">
+    <file>down-arrow.png</file>
+    <file>up-arrow.png</file>
     <file>resize (1).png</file>
     <file>clock2.png</file>
     <file>planner.png</file>
