@@ -8,7 +8,7 @@ from PySide6.QtWidgets import *
 from PySide6.QtWidgets import QApplication, QHBoxLayout, QLineEdit, QMainWindow, QPushButton, QVBoxLayout, QWidget, QMessageBox, QGraphicsOpacityEffect
 from PySide6.QtGui import QTextCharFormat, QTextDocument
 from PySide6.QtWebEngineWidgets import QWebEngineView
-from PySide6.QtCore import QUrl, QPropertyAnimation, QTimer
+from PySide6.QtCore import QUrl, QPropertyAnimation, QTimer, QTime
 from PySide6.QtPrintSupport import QPrinter
 
 # Moduli per gestire gli orari e i giorni:
@@ -130,6 +130,56 @@ class Database:
             # Chiudi la connessione al database
             self.disconnect()
 
+class AddRowDialog(QtWidgets.QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Inserisci l'orario")
+        self.setStyleSheet(
+            "QDialog { background-color: #E9ECEF; border-radius: 10px; }"  # Aggiungi un bordo arrotondato al dialogo
+            "QLabel { color: #212529; font-size: 14px; }"  # Modifica la dimensione del carattere per i label
+            "QTimeEdit { background-color: #ADB5BD; color: #212529; border-radius: 5px; padding: 4px; }"  # Aggiungi un bordo arrotondato e modifica il colore per i QTimeEdit e inserisci del padding interno
+            "QTimeEdit::down-arrow { image: url(:/icons/down-arrow.png); width: 12px; height: 12px; }"  # Aggiungi lo stile per la freccia verso il basso
+            "QTimeEdit::up-arrow { image: url(:/icons/up-arrow.png); width: 12px; height: 12px; }"  # Utilizza un'icona più moderna per la freccia verso l'alto
+            "QTimeEdit::drop-down { subcontrol-origin: padding; subcontrol-position: center right; width: 20px; border-left-width: 0px; }"  # Posiziona il menu a discesa al centro e modifica la larghezza
+        )
+
+        layout = QtWidgets.QHBoxLayout()
+        self.setLayout(layout)
+        
+        self.time_picker_start = QtWidgets.QTimeEdit()
+        self.time_picker_start.setDisplayFormat("HH:mm")
+        self.time_picker_start.setAlignment(QtCore.Qt.AlignCenter)
+        layout.addWidget(self.time_picker_start)
+        
+        separator_label = QtWidgets.QLabel("-")
+        separator_label.setStyleSheet("QLabel { font-size: 18px; }")
+        layout.addWidget(separator_label)
+        
+        self.time_picker_end = QtWidgets.QTimeEdit()
+        self.time_picker_end.setDisplayFormat("HH:mm")
+        self.time_picker_end.setAlignment(QtCore.Qt.AlignCenter)
+        layout.addWidget(self.time_picker_end)
+        
+        button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+        
+        # Imposta il valore minimo del secondo time picker in base al valore del primo
+        self.time_picker_start.timeChanged.connect(self.update_end_time_min)
+
+    def update_end_time_min(self):
+        start_time = self.time_picker_start.time()
+        self.time_picker_end.setMinimumTime(start_time.addSecs(60))  # Imposta il valore minimo come il tempo selezionato più un minuto
+
+    def get_time_interval(self):
+        start_time = self.time_picker_start.time().toString("HH:mm")
+        end_time = self.time_picker_end.time().toString("HH:mm")
+        if start_time and end_time:
+            return f"{start_time}-{end_time}"
+        else:
+            return ""
+
 
 class MainAppScreen(QMainWindow):
     def __init__(self):
@@ -220,10 +270,35 @@ class MainAppScreen(QMainWindow):
         # Imposta gli header orizzontali della tabella con i nomi dei giorni della settimana e le relative date
         self.set_horizontal_headers()
         self.ui.pushButton_5.clicked.connect(self.update_horizontal_headers_next_week)
+         # Connetti il segnale sectionDoubleClicked dell'header verticale al metodo per modificare l'orario
+        self.ui.tableWidget.verticalHeader().sectionDoubleClicked.connect(self.modify_time)
+
 
         self.ui.pushButton_15.clicked.connect(self.update_horizontal_headers_previous_week)
         # Recupera i dati dal database e popola la tabella
         self.populate_table()
+
+    def modify_time(self, row):
+        # Ottieni l'indice della colonna degli orari
+        orario_column_index = 0  # Assumendo che la colonna degli orari sia la prima (indice 0)
+
+        # Ottieni l'orario corrente nella cella corrispondente
+        current_time_item = self.ui.tableWidget.verticalHeaderItem(row)
+        if current_time_item is not None:
+            current_time = current_time_item.text()
+
+            # Apri la finestra di dialogo per modificare l'orario
+            dialog = AddRowDialog()
+            dialog.setWindowTitle("Modifica Orario")
+            dialog.time_picker_start.setTime(QTime.fromString(current_time.split('-')[0], 'hh:mm'))
+            dialog.time_picker_end.setTime(QTime.fromString(current_time.split('-')[1], 'hh:mm'))
+            if dialog.exec_():
+                # Ottieni il nuovo intervallo di tempo dalla finestra di dialogo
+                new_time_interval = dialog.get_time_interval()
+
+                # Aggiorna l'orario nella cella corrispondente
+                new_time_item = QtWidgets.QTableWidgetItem(new_time_interval)
+                self.ui.tableWidget.setVerticalHeaderItem(row, new_time_item)
 
     def update_horizontal_headers_next_week(self):
         # Trova la data del Lunedì della prossima settimana
@@ -257,7 +332,6 @@ class MainAppScreen(QMainWindow):
         
         self.populate_table()
 
-
     def set_horizontal_headers(self):
         # Ottieni la data di oggi
         today = datetime.now()
@@ -289,6 +363,18 @@ class MainAppScreen(QMainWindow):
         week_dates = [start_of_week + datetime.timedelta(days=i) for i in range(7)]
 
         return week_dates
+    
+    def get_orario_column_index(self):
+        # Ottieni il numero totale di colonne
+        total_columns = self.ui.tableWidget.columnCount()
+
+        # Cerca il testo degli header orizzontali per trovare la colonna degli orari
+        for col in range(total_columns):
+            header_text = self.ui.tableWidget.horizontalHeaderItem(col).text()
+            if "Orario" in header_text:  # Modifica questa condizione in base al testo effettivo dell'header
+                return col
+
+        return -1  # Ritorna -1 se non viene trovata la colonna degli orari
     
     def populate_table(self):
         # Pulisci la tabella prima di popolarla nuovamente
@@ -645,22 +731,22 @@ class MainAppScreen(QMainWindow):
         self.ui.textEdit.clear()
 
     def add_row_dialog(self):
-        # Mostra una finestra di dialogo per inserire il titolo della nuova riga
-        title, ok = QtWidgets.QInputDialog.getText(self, "Inserisci Titolo", "Inserisci il titolo della nuova riga:")
-
-        if ok and title:
-            title = title.replace("|", "-")
+        # Mostra la finestra di dialogo personalizzata per inserire l'intervallo di tempo della nuova riga
+        dialog = AddRowDialog(self)
+        if dialog.exec_():
+            time_interval = dialog.get_time_interval()
             
-            # Aggiunge una nuova riga con il titolo inserito
-            row_count = self.ui.tableWidget.rowCount()
-            self.ui.tableWidget.insertRow(row_count)
-            for col in range(self.ui.tableWidget.columnCount()):
-                item = QtWidgets.QTableWidgetItem("")
-                self.ui.tableWidget.setItem(row_count, col, item)
+            if time_interval:
+                # Aggiunge una nuova riga con l'intervallo di tempo inserito
+                row_count = self.ui.tableWidget.rowCount()
+                self.ui.tableWidget.insertRow(row_count)
+                for col in range(self.ui.tableWidget.columnCount()):
+                    item = QtWidgets.QTableWidgetItem("")
+                    self.ui.tableWidget.setItem(row_count, col, item)
 
-            header_item = QtWidgets.QTableWidgetItem(title)
-            header_item.setFont(QtGui.QFont("Arial", weight=QtGui.QFont.Bold))  # Imposta il grassetto
-            self.ui.tableWidget.setVerticalHeaderItem(row_count, header_item)
+                header_item = QtWidgets.QTableWidgetItem(time_interval)
+                header_item.setFont(QtGui.QFont("Arial", weight=QtGui.QFont.Bold))  # Imposta il grassetto
+                self.ui.tableWidget.setVerticalHeaderItem(row_count, header_item)
 
     def toggle_bold(self):
         # Applica o rimuove la formattazione in grassetto al testo selezionato
